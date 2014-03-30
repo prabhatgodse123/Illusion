@@ -16,49 +16,46 @@ function initGL(canvas) {
     }
 }
 
-
-function getShader(gl, id) {
-    var shaderScript = document.getElementById(id);
-    if (!shaderScript) {
-        return null;
-    }
-
-    var str = "";
-    var k = shaderScript.firstChild;
-    while (k) {
-        if (k.nodeType == 3) {
-            str += k.textContent;
+function initShaderCode(callback) {
+    function getShader(shaderScript, type) {
+        if (!shaderScript) {
+            return null;
         }
-        k = k.nextSibling;
+        var shader;
+        if (type == "fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (type == "vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, shaderScript);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
     }
-
-    var shader;
-    if (shaderScript.type == "x-shader/x-fragment") {
-        shader = gl.createShader(gl.FRAGMENT_SHADER);
-    } else if (shaderScript.type == "x-shader/x-vertex") {
-        shader = gl.createShader(gl.VERTEX_SHADER);
-    } else {
-        return null;
-    }
-
-    gl.shaderSource(shader, str);
-    gl.compileShader(shader);
-
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        alert(gl.getShaderInfoLog(shader));
-        return null;
-    }
-
-    return shader;
+    var shaderFragmentCode = "";
+    var shaderVertexCode = "";
+    jQuery.get("shader_fragment", function(data) {
+        shaderFragmentCode = data;
+        jQuery.get("shader_vertex", function(data) {
+            shaderVertexCode = data;
+            var frag = getShader(shaderFragmentCode, "fragment");
+            var vert = getShader(shaderVertexCode, "vertex");
+            initShaders(vert, frag);
+            callback();
+        })
+    })
 }
-
-
 var shaderProgram;
 
-function initShaders() {
-    var fragmentShader = getShader(gl, "shader-fs");
-    var vertexShader = getShader(gl, "shader-vs");
-
+function initShaders(vertexShader, fragmentShader) {
     shaderProgram = gl.createProgram();
     gl.attachShader(shaderProgram, vertexShader);
     gl.attachShader(shaderProgram, fragmentShader);
@@ -93,7 +90,19 @@ function initShaders() {
     shaderProgram.pointLightSpecularColor = gl.getUniformLocation(shaderProgram, "uPointLightSpecularColor");
     shaderProgram.phongComponent = gl.getUniformLocation(shaderProgram, "uPhongComponent");
     shaderProgram.materialDiffuseColor = gl.getUniformLocation(shaderProgram, "uMaterialDiffuseColor");
+    shaderProgram.materialSpecularColor = gl.getUniformLocation(shaderProgram, "uMaterialSpecularColor");
     shaderProgram.useTexture = gl.getUniformLocation(shaderProgram, "useTexture");
+
+    shaderProgram.pointLights = [];
+    shaderProgram.pointLights[0] = {position:{}, diffuseColor:{}, specularColor:{}};
+    shaderProgram.pointLights[0].position = gl.getUniformLocation(shaderProgram, "point_lights[0].position");
+    shaderProgram.pointLights[0].diffuseColor = gl.getUniformLocation(shaderProgram, "point_lights[0].diffuseColor");
+    shaderProgram.pointLights[0].specularColor = gl.getUniformLocation(shaderProgram, "point_lights[0].specularColor");
+
+    shaderProgram.pointLights[1] = {position:{}, diffuseColor:{}, specularColor:{}};
+    shaderProgram.pointLights[1].position = gl.getUniformLocation(shaderProgram, "point_lights[1].position");
+    shaderProgram.pointLights[1].diffuseColor = gl.getUniformLocation(shaderProgram, "point_lights[1].diffuseColor");
+    shaderProgram.pointLights[1].specularColor = gl.getUniformLocation(shaderProgram, "point_lights[1].specularColor");
 }
 
 
@@ -217,6 +226,8 @@ function setMatrixUniforms() {
     gl.uniformMatrix4fv(shaderProgram.lightMVMatrix, false, lightMatrix);
 }
 
+//
+// Mouse Events
 function handleKeyDown(event) {
     currentlyPressesKeys[event.keyCode] = true;
 }
@@ -322,9 +333,15 @@ function handleMouseWheel(event) {
     }
 }
 
+//
+// Keyboard events
 //Toggle transparency
 function toggleTransparency() {
     enableTransparency = !enableTransparency;
+}
+var enableAnimation = true;
+function toggleAnimation() {
+    enableAnimation = !enableAnimation;
 }
 
 function degToRad(degrees) {
@@ -370,11 +387,11 @@ var pointLightDiffuseColorR = 0.8;
 var pointLightDiffuseColorG = 0.8;
 var pointLightDiffuseColorB = 0.8;
 
-var pointLightSpecularColorR = 0.2;
-var pointLightSpecularColorG = 0.2;
-var pointLightSpecularColorB = 0.2;
+var pointLightSpecularColorR = 0.15;
+var pointLightSpecularColorG = 0.15;
+var pointLightSpecularColorB = 0.15;
 
-var pointLightPositionX = 0.0;
+var pointLightPositionX = 10.0;
 var pointLightPositionY = 10.0;
 var pointLightPositionZ = 10.0;
 
@@ -417,20 +434,25 @@ function initBuffers() {
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     }
+}
 
-
+function initIllusionLighting() {
     //Set the lighting parameters and pass the buffers to graphics card
     //Apply scene lighting effects
 
     gl.uniform3f(shaderProgram.ambientColorUniform, ambientR, ambientG, ambientB);
 
     //Apply light position
-    gl.uniform3f(shaderProgram.pointLightPosition, pointLightPositionX, pointLightPositionY, pointLightPositionZ );
+    gl.uniform3f(shaderProgram.pointLights[0].position, pointLightPositionX, pointLightPositionY, pointLightPositionZ);
 
     //Apply point light colors.
-    gl.uniform3f(shaderProgram.pointLightDiffuseColor, pointLightDiffuseColorR, pointLightDiffuseColorG, pointLightDiffuseColorB);
-    gl.uniform3f(shaderProgram.pointLightSpecularColor, pointLightSpecularColorR, pointLightSpecularColorG, pointLightSpecularColorB);
+    gl.uniform3f(shaderProgram.pointLights[0].diffuseColor, pointLightDiffuseColorR, pointLightDiffuseColorG, pointLightDiffuseColorB);
+    gl.uniform3f(shaderProgram.pointLights[0].specularColor, pointLightSpecularColorR, pointLightSpecularColorG, pointLightSpecularColorB);
     gl.uniform1f(shaderProgram.phongComponent, phongComponent);
+
+    gl.uniform3f(shaderProgram.pointLights[1].position, -10.0, -10.0, -10.0);
+    gl.uniform3f(shaderProgram.pointLights[1].diffuseColor, 0.62, 0.67, 0.58);
+    gl.uniform3f(shaderProgram.pointLights[1].specularColor, 0.25, 0.27, 0.20);
 }
 
 function Illusion_Geometry() {
@@ -446,7 +468,7 @@ function Illusion_Group(id) {
     this.id = id;
     this.diffuseColor = {r:0.0, g:0.0, b:0.0};
     this.specularColor = {r:0.0, g:0.0, b:0.0};
-    this.phongComponent = 0.0;  //The shineness factor of the specular color.
+    this.phongComponent = 10.0;  //The shineness factor of the specular color.
     this.alpha = 1.0;
     this.isTransparent = false;
     this.textureArray = [];
@@ -513,7 +535,7 @@ function Illusion_Group(id) {
 
     this.renderObject = function() {
         if (this.isTransparent) {
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
             gl.enable(gl.BLEND);
             gl.uniform1f(shaderProgram.alphaUniform, this.alpha);
         } else {
@@ -528,6 +550,8 @@ function Illusion_Group(id) {
             gl.uniform1i(shaderProgram.useTexture, true);
         }
         gl.uniform3f(shaderProgram.materialDiffuseColor, this.diffuseColor.r, this.diffuseColor.g, this.diffuseColor.b);
+        gl.uniform3f(shaderProgram.materialSpecularColor, this.specularColor.r, this.specularColor.g, this.specularColor.b);
+        gl.uniform1f(shaderProgram.phongComponent, this.phongComponent);
         //Set the textures
         if  (this.textureArray.length > 1) {
             gl.uniform1i(shaderProgram.layerTexture, true);
@@ -563,12 +587,14 @@ function initObjects() {
     teapot_object.setSpecularColor(0.2, 0.2, 0.2);
     teapot_object.setPhongComponent(20.0);
     teapot_object.addTexture(stoneFloorTexture);
+    teapot_object.isTransparent = true;
+    teapot_object.alpha = 0.8;
     //teapot_object.addTexture(hardWaterTexture);
     teapot_object.setDiffuseColor(0.4, 0.72, 0.34);
 
     teapot_object.applyScaling([0.5, 0.5, 0.5]);
     teapot_object.buildGeometryWithObjFile('/scene/teapot.txt');
-    Illusion_ObjectList.push(teapot_object);
+    //Illusion_ObjectList.push(teapot_object);
 
     var medival_barrel_object = new Illusion_Group("medival-barrel");
     medival_barrel_object.addTexture(hazeTexture);
@@ -586,16 +612,20 @@ function initObjects() {
         }
     }
     medival_barrel_object.buildGeometryWithObjFile('scene/MedievalBarrel/MedievalBarrel_OBJ.OBJ');
-    Illusion_Animator_Add(medival_barrel_object.animationCallback);
+
     Illusion_ObjectList.push(medival_barrel_object);
 
     var tank_object = new Illusion_Group("tank");
     //tank_object.addTexture(hardWaterTexture);
     //tank_object.addTexture(stoneFloorTexture);
-    tank_object.applyTransformations([10.0, -7.0, 0.0]);
-    tank_object.setDiffuseColor(0.5, 0.12, 0.76);
-    tank_object.rotateY = 90;
-    tank_object.buildGeometryWithObjFile('scene/weight/weight.obj');
+    tank_object.applyTransformations([10.0, -8.0, 8.0]);
+    tank_object.setDiffuseColor(0.5, 0.15, 0.15);
+    tank_object.setSpecularColor(0.15, 0.15, 0.15);
+    tank_object.setPhongComponent(15.0);
+    tank_object.rotateX = -90;
+    tank_object.rotateZ = 45;
+    tank_object.applyScaling([0.1, 0.1, 0.1]);
+    tank_object.buildGeometryWithObjFile('scene/mini.obj');
     Illusion_ObjectList.push(tank_object);
 
 
@@ -623,6 +653,8 @@ function initObjects() {
     ILLUSION_LOADED_OBJECT_COUNT += 1;
 
     Illusion_ObjectList.push(floor_object);
+    Illusion_ObjectList.push(teapot_object);
+    //Illusion_Animator_Add(animateLight);
 }
 
 
@@ -772,6 +804,26 @@ var lastTime = 0;
 var lightTime = 0;
 var sign = 1;
 var Illusion_Animation_Handler = [];
+
+function animateLight() {
+    var timeNow = new Date().getTime();
+    lightModulator = (Math.sin(timeNow/550));
+    pointLightPositionX += lightModulator;
+    pointLightPositionY += (Math.cos(timeNow/550));
+
+    pointLightDiffuseColorR += (lightModulator) * 0.01;
+    pointLightSpecularColorG += (lightModulator) * 0.01;
+    //pointLightDiffuseColorB += Math.abs(lightModulator) * 0.1;
+
+    //Apply light position
+    gl.uniform3f(shaderProgram.pointLights[0].position, pointLightPositionX, pointLightPositionY, pointLightPositionZ );
+
+    //Apply point light colors.
+    gl.uniform3f(shaderProgram.pointLights[0].diffuseColor, pointLightDiffuseColorR, pointLightDiffuseColorG, pointLightDiffuseColorB);
+    gl.uniform3f(shaderProgram.pointLights[0].specularColor, pointLightSpecularColorR, pointLightSpecularColorG, pointLightSpecularColorB);
+}
+
+
 function Illusion_Animator_Add(anim) {
     Illusion_Animation_Handler.push(anim);
 }
@@ -779,10 +831,13 @@ function Illusion_Fire_Animations() {
     for (var idx in Illusion_ObjectList) {
         Illusion_ObjectList[idx].animationCallback();
     }
+    for (var idx in Illusion_Animation_Handler) {
+        Illusion_Animation_Handler[idx]();
+    }
 }
 function animate() {
     var timeNow = new Date().getTime();
-    lightModulator = (Math.sin(timeNow/250));
+
     if (lastTime != 0) {
         var elapsed = timeNow - lastTime;
 
@@ -792,7 +847,7 @@ function animate() {
             } else if(xRot < -20) {
                 sign = 1;
             }
-        }g
+        }
         xRot += 0.5 * sign;
         yRot += (90 * elapsed) / 1000.0;
         zRot += (90 * elapsed) / 1000.0;
@@ -805,6 +860,7 @@ function tick() {
     requestAnimFrame(tick);
     handleKeys();
     drawScene();
+    if(enableAnimation)
     Illusion_Fire_Animations();
 }
 
@@ -844,6 +900,7 @@ function webGLStart() {
     if (ILLUSION_LOADED_OBJECT_COUNT == ILLUSION_MAX_OBJECT_COUNT) {
         //Send the object geometry to Graphics Card and begin rendering.
         initBuffers();
+        initIllusionLighting();
         drawScene();
         tick();
     }
@@ -856,11 +913,14 @@ function initIllusion() {
 
     initGL(canvas);
     ext = gl.getExtension("OES_vertex_array_object");
-    initShaders();
-    initTextureFrameBuffer();
-    initFrameBuffer();
-    initTexture();
-    initObjects();
+    //initShaders();
+    initShaderCode(callback);
+    function callback() {
+        initTextureFrameBuffer();
+        initFrameBuffer();
+        initTexture();
+        initObjects();
+    }
     gl.clearColor(0.2265, 0.496, 0.789, 1.0);
     gl.enable(gl.DEPTH_TEST);
 

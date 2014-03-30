@@ -74,13 +74,21 @@ obj_loader.Mesh = function( objectData ){
                 packed.verts.push( verts[ (face[ 0 ] - 1) * 3 + 0 ] );
                 packed.verts.push( verts[ (face[ 0 ] - 1) * 3 + 1 ] );
                 packed.verts.push( verts[ (face[ 0 ] - 1) * 3 + 2 ] );
-                // vertex textures
-                packed.textures.push( textures[ (face[ 1 ] - 1) * 2 + 0 ] );
-                packed.textures.push( textures[ (face[ 1 ] - 1) * 2 + 1 ] );
-                // vertex normals
-                packed.norms.push( vertNormals[ (face[ 2 ] - 1) * 3 + 0 ] );
-                packed.norms.push( vertNormals[ (face[ 2 ] - 1) * 3 + 1 ] );
-                packed.norms.push( vertNormals[ (face[ 2 ] - 1) * 3 + 2 ] );
+                if(face.length == 3) {
+                    // vertex textures
+                    packed.textures.push( textures[ (face[ 1 ] - 1) * 2 + 0 ] );
+                    packed.textures.push( textures[ (face[ 1 ] - 1) * 2 + 1 ] );
+                    // vertex normals
+                    packed.norms.push( vertNormals[ (face[ 2 ] - 1) * 3 + 0 ] );
+                    packed.norms.push( vertNormals[ (face[ 2 ] - 1) * 3 + 1 ] );
+                    packed.norms.push( vertNormals[ (face[ 2 ] - 1) * 3 + 2 ] );
+                } else {
+                    packed.textures.push(0);
+                    packed.textures.push(0);
+                    packed.norms.push( vertNormals[ (face[ 1 ] - 1) * 3 + 0 ] );
+                    packed.norms.push( vertNormals[ (face[ 1 ] - 1) * 3 + 1 ] );
+                    packed.norms.push( vertNormals[ (face[ 1 ] - 1) * 3 + 2 ] );
+                }
                 // add the newly created vertex to the list of indices
                 packed.hashindices[ line[ j ] ] = packed.index;
                 packed.indices.push( packed.index );
